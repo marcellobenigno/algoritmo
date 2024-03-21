@@ -51,22 +51,30 @@ class AreaCaixa:
 
         return qtde_caixas_interceptadas
 
-    def atualiza_market_index(self, pol_caixa_wkt):
-        pol_caixa = ogr.CreateGeometryFromWkt(pol_caixa_wkt)
+    def calcula_market_index(self):
+        sql = '''
+        SELECT a.id_caixa, SUM(b."market-index") AS soma_market_index
+        FROM  areas_de_caixa a, layer_demandas_ordenadas b
+        WHERE ST_Intersects(a.geometry, b.geometry)
+        GROUP BY a.id_caixa
+        '''
 
-        demandas = self.datasource_entrada.GetLayer('layer_demandas_ordenadas')
+        query = self.datasource_entrada.ExecuteSQL(sql, dialect="SQLite")
 
-        demandas.SetSpatialFilter(pol_caixa)
-        total_market_index = 0
+        areas_de_caixas = self.datasource_entrada.GetLayer('areas_de_caixa')
 
-        for feature in demandas:
-            geom = feature.GetGeometryRef()
-            if pol_caixa.Intersects(geom):
-                total_market_index += feature['market-index']
+        areas_de_caixas.StartTransaction()
+        feature = ogr.Feature(areas_de_caixas.GetLayerDefn())
+        for row in query:
+            for feature in areas_de_caixas:
+                if feature['id_caixa'] == row['id_caixa']:
+                    feature.SetField('market-index', row['soma_market_index'])
+                    areas_de_caixas.SetFeature(feature)
+                    areas_de_caixas.CommitTransaction()
 
-        demandas.SetSpatialFilter(None)
+        self.datasource_entrada.ReleaseResultSet(query)
 
-        return total_market_index
+        return areas_de_caixas
 
     def add_area_caixa(self, id_caixa, dist_maxima_arruamento):
         pol_caixa_wkt = None
@@ -102,8 +110,7 @@ class AreaCaixa:
             if not self.check_arruamento_intercepta_caixa(pol_caixa_wkt):
                 feature.SetField('id_caixa', id_caixa)
                 feature.SetField('StreetCode_associado', row['StreetCode_associado'])
-                soma_market_index = self.atualiza_market_index(pol_caixa_wkt)
-                feature.SetField('market-index', soma_market_index)
+                feature.SetField('market-index', None)
                 # obtem a soma dos market-index
                 self.get_layer().SetFeature(feature)
                 self.get_layer().CommitTransaction()
