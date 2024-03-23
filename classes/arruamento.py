@@ -41,7 +41,7 @@ class Arruamento:
 
     def cria_arruamento_recortado(self):
         lyr_arruamentos_recortados = self.datasource_entrada.CreateLayer(
-            f"arruamento_recortado",
+            f"lyr_arruamento_recortado",
             geom_type=ogr.wkbLineString,
             srs=self.get_srs()
         )
@@ -53,7 +53,7 @@ class Arruamento:
 
         return lyr_arruamentos_recortados
 
-    def recorta_arruamento(self, lyr_arruamentos_recortados, ponto_inicial, ponto_final, streetcode, id_caixa):
+    def recorta_arruamento(self, ponto_inicial, ponto_final, streetcode, id_caixa):
         sql = f'''
                 SELECT StreetCode, {id_caixa},
                         ST_Line_Substring(
@@ -79,16 +79,61 @@ class Arruamento:
 
         query = self.datasource_entrada.ExecuteSQL(sql, dialect="SQLite")
 
-        lyr_arruamentos_recortados.StartTransaction()
+        lyr_arruamento_recortado = self.datasource_entrada.GetLayer('lyr_arruamento_recortado')
+
+        lyr_arruamento_recortado.StartTransaction()
 
         for row in query:
-            feature = ogr.Feature(lyr_arruamentos_recortados.GetLayerDefn())
+            feature = ogr.Feature(lyr_arruamento_recortado.GetLayerDefn())
             feature.SetGeometry(row['geometry'])
             feature.SetField('StreetCode', streetcode)
             feature.SetField('id_caixa', id_caixa)
-            lyr_arruamentos_recortados.SetFeature(feature)
+            lyr_arruamento_recortado.SetFeature(feature)
 
-        lyr_arruamentos_recortados.CommitTransaction()
+        lyr_arruamento_recortado.CommitTransaction()
         self.datasource_entrada.ReleaseResultSet(query)
 
-        return lyr_arruamentos_recortados
+        return lyr_arruamento_recortado
+
+    def subdivide_arruamento_recortado(self, caixas_rsecundarias):
+
+        for id_caixa in caixas_rsecundarias:
+            demandas_ordenadas = self.datasource_entrada.GetLayer('layer_demandas_ordenadas')
+            sql = f'''SELECT *
+                    FROM layer_demandas_ordenadas
+                    WHERE id_caixa = '{id_caixa}'
+                    ORDER BY id                 
+                '''
+            query = self.datasource_entrada.ExecuteSQL(sql)
+
+            pnt_inicial = query.GetNextFeature()
+            geom_inicial = pnt_inicial.GetGeometryRef()
+            self.datasource_entrada.ReleaseResultSet(query)
+
+            sql = f'{sql} DESC'
+            query = self.datasource_entrada.ExecuteSQL(sql)
+            pnt_final = query.GetNextFeature()
+            geom_final = pnt_final.GetGeometryRef()
+            self.datasource_entrada.ReleaseResultSet(query)
+
+
+
+
+        # lyr_arruamento_recortado = self.datasource_entrada.GetLayer('lyr_arruamento_recortado')
+        # lyr_linhas_demandas = self.datasource_entrada.GetLayer('layer_linhas_demandas')
+        #
+        # # apagando os arruamentos recortados que nao geraram caixa:
+        # lista_fids = []
+        # for linha in lyr_linhas_demandas:
+        #     geom_linha = linha.GetGeometryRef()
+        #     for arruamento in lyr_arruamento_recortado:
+        #         geom_arruamento = arruamento.GetGeometryRef()
+        #         if geom_linha.Intersects(geom_arruamento):
+        #             fid = arruamento.GetFID()
+        #             if fid not in lista_fids:
+        #                 lista_fids.append(arruamento.GetFID())
+        #
+        # lyr_arruamento_recortado.StartTransaction()
+        # for fid in lista_fids:
+        #     lyr_arruamento_recortado.DeleteFeature(fid)
+        # lyr_linhas_demandas.CommitTransaction()

@@ -74,10 +74,9 @@ class Demanda:
         layer.CreateField(ogr.FieldDefn('associado', ogr.OFTInteger))
         return layer
 
-    def gera_demandas_ordenadas_por_arruamento(self, streetcode):
+    def gera_demandas_ordenadas_por_arruamento(self, i, streetcode):
         sql = f'''    
                  SELECT
-                   ROW_NUMBER() OVER () AS id,
                    id_demanda, 
                    StreetCode, 
                    "market-index",
@@ -107,7 +106,7 @@ class Demanda:
                 self.get_layer().StartTransaction()
                 feature = ogr.Feature(self.demandas_ordenadas.GetLayerDefn())
                 feature.SetGeometry(row['geometry'])
-                feature.SetField('id', row['id'])
+                feature.SetField('id', i)
                 feature.SetField('id_demanda', row['id_demanda'])
                 feature.SetField('StreetCode', row['StreetCode'])
                 feature.SetField('market-index', row['market-index'])
@@ -123,28 +122,25 @@ class Demanda:
                 feature.SetField('id_caixa', f'{row["StreetCode"]}.{id_caixa}')
                 self.demandas_ordenadas.SetFeature(feature)
                 self.demandas_ordenadas.CommitTransaction()
+                i += 1
 
             self.datasource_entrada.ReleaseResultSet(query)
 
             return self.datasource_entrada.GetLayer('layer_demandas_ordenadas')
 
     def get_maior_distancia_arruamento(self, demandas_ordenadas, street_code):
-
         sql = f'''
                     SELECT max(dist_arruamento) AS max_dist_arruamento
                     FROM {demandas_ordenadas.GetName()}
                     WHERE "StreetCode" = {street_code}
                 '''
-
         query = self.datasource_entrada.ExecuteSQL(sql, dialect="SQLite")
-
         max_dist_arruamento = 0
 
         for row in query:
             max_dist_arruamento = row['max_dist_arruamento']
 
         self.datasource_entrada.ReleaseResultSet(query)
-
         return max_dist_arruamento
 
     def gera_pnt_inicial_final_id_caixas(self, lyr_demanda_ordenada, street_code):
@@ -270,25 +266,50 @@ class Demanda:
         return lyr_linhas_demandas
 
     def atualiza_campo_id_caixa(self):
-        sql = '''
-            SELECT a.id_caixa AS id_caixa_atual, b.id_caixa AS id_caixa_novo
-            FROM layer_demandas_ordenadas a, layer_linhas_demandas b
-            WHERE ST_Intersects(ST_Buffer(a.geometry, 0.1), b.geometry)
-            AND a.associado = 0
-        '''
+        lyr_demandas_ordenadas = self.datasource_entrada.GetLayer('layer_demandas_ordenadas')
+        lyr_demandas_ordenadas.SetAttributeFilter('associado = 0')
+
+        lyr_linhas = self.datasource_entrada.GetLayer('layer_linhas_demandas')
+
+        lyr_demandas_ordenadas.StartTransaction()
+
+        for linha in lyr_linhas:
+            linha_geom = linha.GetGeometryRef()
+            for demanda in lyr_demandas_ordenadas:
+                demanda_geom = demanda.GetGeometryRef()
+                if demanda_geom.Buffer(0.1).Intersects(linha_geom):
+                    demanda.SetField('id_caixa', linha.GetField('id_caixa'))
+                    lyr_demandas_ordenadas.SetFeature(demanda)
+
+        lyr_demandas_ordenadas.CommitTransaction()
+        lyr_demandas_ordenadas.SetAttributeFilter(None)
+
+        return lyr_demandas_ordenadas
+
+    def atualiza_distancias_arruamento(self, streetcode):
+        sql = f'''
+                SELECT id_demanda, ST_Distance(d.geometry, a.geometry) AS dist_arruamento
+                FROM layer_arruamento a,
+                     layer_demandas_ordenadas d
+                WHERE a.StreetCode = {streetcode}
+                  AND d.StreetCode = {streetcode}
+                  AND d.associado = 0
+                ORDER BY st_line_locate_point(a.geometry, st_closestpoint(a.geometry, d.geometry))
+            '''
         query = self.datasource_entrada.ExecuteSQL(sql, dialect="SQLite")
 
-        demandas_ordenadas = self.datasource_entrada.GetLayer('layer_demandas_ordenadas')
-        feature = ogr.Feature(demandas_ordenadas.GetLayerDefn())
-        demandas_ordenadas.StartTransaction()
-        for row in query:
-            for feature in demandas_ordenadas:
-                if feature['id_caixa'] == row['id_caixa_atual']:
+        lyr_demandas_ordenadas = self.datasource_entrada.GetLayer('layer_demandas_ordenadas')
+        lyr_demandas_ordenadas.StartTransaction()
 
-                    print(feature['id_caixa'], row['id_caixa_atual'])
+        for demanda in lyr_demandas_ordenadas:
+            for row in query:
+                if demanda['id_demanda'] == row['id_demanda']:
+                    demanda.SetField('dist_arruamento', row['dist_arruamento'])
+                    print(demanda.id_demanda, row['dist_arruamento'])
 
-                    feature.SetField("id_caixa", row['id_caixa_novo'])
-                    demandas_ordenadas.SetFeature(feature)
-        demandas_ordenadas.CommitTransaction()
+                    # lyr_demandas_ordenadas.SetFeature(demanda)
 
-        return demandas_ordenadas
+        # lyr_demandas_ordenadas.CommitTransaction()
+        self.datasource_entrada.ReleaseResultSet(query)
+
+        return lyr_demandas_ordenadas

@@ -65,20 +65,65 @@ class AreaCaixa:
 
         areas_de_caixas.StartTransaction()
         feature = ogr.Feature(areas_de_caixas.GetLayerDefn())
+
         for row in query:
             for feature in areas_de_caixas:
                 if feature['id_caixa'] == row['id_caixa']:
                     feature.SetField('market-index', row['soma_market_index'])
                     areas_de_caixas.SetFeature(feature)
-                    areas_de_caixas.CommitTransaction()
 
+        areas_de_caixas.CommitTransaction()
         self.datasource_entrada.ReleaseResultSet(query)
 
         return areas_de_caixas
 
     def add_area_caixa(self, id_caixa, dist_maxima_arruamento):
-        pol_caixa_wkt = None
-        arruamento_recortado_tmp = self.datasource_entrada.GetLayer('arruamento_recortado')
+        caixa_criada = False
+        lyr_arruamento_recortado = self.datasource_entrada.GetLayer('lyr_arruamento_recortado')
+        lyr_arruamento_recortado.SetAttributeFilter(f"id_caixa = '{id_caixa}'")
+
+        sql = f'''
+            SELECT 
+                    BufferOptions_SetEndCapStyle('FLAT'),
+                    BufferOptions_SetJoinStyle('MITRE'),
+                    BufferOptions_SetMitreLimit(2.5),
+                tmp."StreetCode_associado", 
+                ST_Buffer(tmp.geometry_buffer, 1.5) AS geometry 
+            FROM        
+                (SELECT
+                    BufferOptions_SetEndCapStyle('FLAT'),
+                    BufferOptions_SetJoinStyle('MITRE'),
+                    BufferOptions_SetMitreLimit(2.5),
+                    "StreetCode" AS 'StreetCode_associado',
+                    ST_Buffer(geometry, {dist_maxima_arruamento}) AS geometry_buffer
+                FROM {lyr_arruamento_recortado.GetName()}
+                ) tmp
+            '''
+
+        query = self.datasource_entrada.ExecuteSQL(sql, dialect="SQLite")
+        self.get_layer().StartTransaction()
+
+        for row in query:
+            feature = ogr.Feature(self.get_layer().GetLayerDefn())
+            feature.SetGeometry(row['geometry'])
+            pol_caixa_wkt = feature.GetGeometryRef().ExportToWkt()
+
+            if not self.check_arruamento_intercepta_caixa(pol_caixa_wkt):
+                feature.SetField('id_caixa', id_caixa)
+                feature.SetField('StreetCode_associado', row['StreetCode_associado'])
+                feature.SetField('market-index', None)
+                self.get_layer().SetFeature(feature)
+                caixa_criada = True
+
+        self.get_layer().CommitTransaction()
+        self.datasource_entrada.ReleaseResultSet(query)
+        lyr_arruamento_recortado.SetAttributeFilter(None)
+
+        return caixa_criada
+
+    def add_area_caixa_2(self, id_caixa, dist_maxima_arruamento):
+        caixa_criada = False
+        arruamento_recortado_tmp = self.datasource_entrada.GetLayer('lyr_arruamento_recortado')
         arruamento_recortado_tmp.SetAttributeFilter(f"id_caixa = '{id_caixa}'")
 
         sql = f'''
@@ -102,21 +147,19 @@ class AreaCaixa:
         query = self.datasource_entrada.ExecuteSQL(sql, dialect="SQLite")
 
         self.get_layer().StartTransaction()
+
         for row in query:
             feature = ogr.Feature(self.get_layer().GetLayerDefn())
             feature.SetGeometry(row['geometry'])
-            pol_caixa_wkt = feature.GetGeometryRef().ExportToWkt()
+            feature.SetField('id_caixa', id_caixa)
+            feature.SetField('StreetCode_associado', row['StreetCode_associado'])
+            feature.SetField('market-index', None)
+            self.get_layer().SetFeature(feature)
+            caixa_criada = True
 
-            if not self.check_arruamento_intercepta_caixa(pol_caixa_wkt):
-                feature.SetField('id_caixa', id_caixa)
-                feature.SetField('StreetCode_associado', row['StreetCode_associado'])
-                feature.SetField('market-index', None)
-                # obtem a soma dos market-index
-                self.get_layer().SetFeature(feature)
-                self.get_layer().CommitTransaction()
-
+        self.get_layer().CommitTransaction()
         self.datasource_entrada.ReleaseResultSet(query)
 
         arruamento_recortado_tmp.SetAttributeFilter(None)
 
-        return pol_caixa_wkt
+        return caixa_criada

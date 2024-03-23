@@ -64,13 +64,16 @@ class Testada:
                 LIMIT 1
                 '''
             query = self.datasource_entrada.ExecuteSQL(sql, dialect='SQLite')
+
+            layer_testada.StartTransaction()
+
             for row in query:
-                layer_testada.StartTransaction()
                 for feature in layer_testada:
                     if row.GetField('id_testada') == feature.GetField('id_testada'):
                         feature.SetField('StreetCode', row.GetField('StreetCode'))
                         layer_testada.SetFeature(feature)
-                layer_testada.CommitTransaction()
+
+            layer_testada.CommitTransaction()
             layer_testada.SetAttributeFilter(None)
 
         self.datasource_entrada.CopyLayer(layer_testada, 'layer_testada')
