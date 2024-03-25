@@ -77,29 +77,31 @@ class AreaCaixa:
 
         return areas_de_caixas
 
+    def caixa_sql_query(self, dist_maxima_arruamento):
+        sql = f'''
+                    SELECT 
+                            BufferOptions_SetEndCapStyle('FLAT'),
+                            BufferOptions_SetJoinStyle('MITRE'),
+                            BufferOptions_SetMitreLimit(2.5),
+                        tmp."StreetCode_associado", 
+                        ST_Buffer(tmp.geometry_buffer, 1.5) AS geometry 
+                    FROM        
+                        (SELECT
+                            BufferOptions_SetEndCapStyle('FLAT'),
+                            BufferOptions_SetJoinStyle('MITRE'),
+                            BufferOptions_SetMitreLimit(2.5),
+                            "StreetCode" AS 'StreetCode_associado',
+                            ST_Buffer(geometry, {dist_maxima_arruamento}) AS geometry_buffer
+                        FROM lyr_arruamento_recortado
+                        ) tmp
+                    '''
+        return sql
+
     def add_area_caixa(self, id_caixa, dist_maxima_arruamento):
         caixa_criada = False
         lyr_arruamento_recortado = self.datasource_entrada.GetLayer('lyr_arruamento_recortado')
         lyr_arruamento_recortado.SetAttributeFilter(f"id_caixa = '{id_caixa}'")
-
-        sql = f'''
-            SELECT 
-                    BufferOptions_SetEndCapStyle('FLAT'),
-                    BufferOptions_SetJoinStyle('MITRE'),
-                    BufferOptions_SetMitreLimit(2.5),
-                tmp."StreetCode_associado", 
-                ST_Buffer(tmp.geometry_buffer, 1.5) AS geometry 
-            FROM        
-                (SELECT
-                    BufferOptions_SetEndCapStyle('FLAT'),
-                    BufferOptions_SetJoinStyle('MITRE'),
-                    BufferOptions_SetMitreLimit(2.5),
-                    "StreetCode" AS 'StreetCode_associado',
-                    ST_Buffer(geometry, {dist_maxima_arruamento}) AS geometry_buffer
-                FROM {lyr_arruamento_recortado.GetName()}
-                ) tmp
-            '''
-
+        sql = self.caixa_sql_query(dist_maxima_arruamento)
         query = self.datasource_entrada.ExecuteSQL(sql, dialect="SQLite")
         self.get_layer().StartTransaction()
 
@@ -121,12 +123,13 @@ class AreaCaixa:
 
         return caixa_criada
 
-    def add_area_caixa_2(self, id_caixa, dist_maxima_arruamento):
+    def add_area_caixa_secundaria(self, id_caixa, dist_maxima_arruamento):
         caixa_criada = False
-        arruamento_recortado_tmp = self.datasource_entrada.GetLayer('lyr_arruamento_recortado')
-        arruamento_recortado_tmp.SetAttributeFilter(f"id_caixa = '{id_caixa}'")
+        lyr_arruamento_recortado = self.datasource_entrada.GetLayer('lyr_arruamento_recortado')
+        lyr_arruamento_recortado.SetAttributeFilter(f"id_caixa = '{id_caixa}'")
 
-        sql = f'''
+        if lyr_arruamento_recortado.GetFeatureCount():
+            sql = f'''
             SELECT 
                     BufferOptions_SetEndCapStyle('FLAT'),
                     BufferOptions_SetJoinStyle('MITRE'),
@@ -140,26 +143,36 @@ class AreaCaixa:
                     BufferOptions_SetMitreLimit(2.5),
                     "StreetCode" AS 'StreetCode_associado',
                     ST_Buffer(geometry, {dist_maxima_arruamento}) AS geometry_buffer
-                FROM {arruamento_recortado_tmp.GetName()}
+                FROM lyr_arruamento_recortado
+                WHERE id_caixa = '{id_caixa}'
                 ) tmp
             '''
 
-        query = self.datasource_entrada.ExecuteSQL(sql, dialect="SQLite")
+            query = self.datasource_entrada.ExecuteSQL(sql, dialect="SQLite")
 
-        self.get_layer().StartTransaction()
+            self.get_layer().StartTransaction()
 
-        for row in query:
-            feature = ogr.Feature(self.get_layer().GetLayerDefn())
-            feature.SetGeometry(row['geometry'])
-            feature.SetField('id_caixa', id_caixa)
-            feature.SetField('StreetCode_associado', row['StreetCode_associado'])
-            feature.SetField('market-index', None)
-            self.get_layer().SetFeature(feature)
-            caixa_criada = True
+            for row in query:
+                feature = ogr.Feature(self.get_layer().GetLayerDefn())
+                feature.SetGeometry(row['geometry'])
+                pol_caixa = feature.GetGeometryRef()
 
-        self.get_layer().CommitTransaction()
-        self.datasource_entrada.ReleaseResultSet(query)
+                for feat_caixa in self.get_layer():
+                    geom_caixa = feat_caixa.GetGeometryRef()
+                    if geom_caixa.Intersects(pol_caixa):
+                        pol_caixa = pol_caixa.Difference(geom_caixa)
+                    else:
+                        pass
 
-        arruamento_recortado_tmp.SetAttributeFilter(None)
+                feature.SetGeometry(pol_caixa)
+                feature.SetField('id_caixa', id_caixa)
+                feature.SetField('StreetCode_associado', row['StreetCode_associado'])
+                feature.SetField('market-index', None)
+                self.get_layer().SetFeature(feature)
+                caixa_criada = True
+
+            self.get_layer().CommitTransaction()
+            self.datasource_entrada.ReleaseResultSet(query)
+        lyr_arruamento_recortado.SetAttributeFilter(None)
 
         return caixa_criada

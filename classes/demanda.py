@@ -288,7 +288,7 @@ class Demanda:
 
     def atualiza_distancias_arruamento(self, streetcode):
         sql = f'''
-                SELECT id_demanda, ST_Distance(d.geometry, a.geometry) AS dist_arruamento
+                SELECT id_demanda, ST_Distance(d.geometry, a.geometry) AS dist_arruamento, geometry
                 FROM layer_arruamento a,
                      layer_demandas_ordenadas d
                 WHERE a.StreetCode = {streetcode}
