@@ -7,6 +7,7 @@ class Arruamento:
     def __init__(self, datasource_entrada, layer='layer_arruamento'):
         self.datasource_entrada = datasource_entrada
         self.layer = layer
+        self.cria_arruamento_recortado()
 
     def __str__(self):
         return self.get_layer().GetName()
@@ -96,17 +97,10 @@ class Arruamento:
         return lyr_arruamento_recortado
 
     def cria_arruamento_recortado_secundario(self, caixas_secundarias):
-
         lyr_arruamento_recortado = self.datasource_entrada.GetLayer('lyr_arruamento_recortado')
-        lyr_arruamento_recortado_tmp = self.datasource_entrada.CopyLayer(
-            lyr_arruamento_recortado,
-            'lyr_arruamento_recortado_tmp'
-        )
-        lyr_linhas_demandas = self.datasource_entrada.GetLayer('layer_linhas_demandas')
-
         self.datasource_entrada.CopyLayer(
             lyr_arruamento_recortado,
-            'lyr_arruamento_secundario'
+            'lyr_arruamento_recortado_tmp'
         )
 
         for id_caixa in caixas_secundarias:

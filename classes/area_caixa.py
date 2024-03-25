@@ -15,8 +15,12 @@ class AreaCaixa:
     def __str__(self):
         return self.get_layer().GetName()
 
-    def get_layer(self):
-        return self.datasource_entrada.GetLayer(self.layer)
+    def get_layer(self, bbox=None):
+        lyr = self.datasource_entrada.GetLayer(self.layer)
+        lyr.SetSpatialFilter(None)
+        if bbox:
+            lyr.SetSpatialFilter(bbox)
+        return lyr
 
     def cria_layer(self):
         layer = self.datasource_entrada.CreateLayer(self.layer, srs=self.get_srs(), geom_type=ogr.wkbPolygon)
@@ -77,7 +81,7 @@ class AreaCaixa:
 
         return areas_de_caixas
 
-    def caixa_sql_query(self, dist_maxima_arruamento):
+    def caixa_sql_query(self, dist_maxima_arruamento, where_clause='1=1'):
         sql = f'''
                     SELECT 
                             BufferOptions_SetEndCapStyle('FLAT'),
@@ -93,6 +97,7 @@ class AreaCaixa:
                             "StreetCode" AS 'StreetCode_associado',
                             ST_Buffer(geometry, {dist_maxima_arruamento}) AS geometry_buffer
                         FROM lyr_arruamento_recortado
+                        WHERE {where_clause}
                         ) tmp
                     '''
         return sql
@@ -129,25 +134,9 @@ class AreaCaixa:
         lyr_arruamento_recortado.SetAttributeFilter(f"id_caixa = '{id_caixa}'")
 
         if lyr_arruamento_recortado.GetFeatureCount():
-            sql = f'''
-            SELECT 
-                    BufferOptions_SetEndCapStyle('FLAT'),
-                    BufferOptions_SetJoinStyle('MITRE'),
-                    BufferOptions_SetMitreLimit(2.5),
-                tmp."StreetCode_associado", 
-                ST_Buffer(tmp.geometry_buffer, 1.5) AS geometry 
-            FROM        
-                (SELECT
-                    BufferOptions_SetEndCapStyle('FLAT'),
-                    BufferOptions_SetJoinStyle('MITRE'),
-                    BufferOptions_SetMitreLimit(2.5),
-                    "StreetCode" AS 'StreetCode_associado',
-                    ST_Buffer(geometry, {dist_maxima_arruamento}) AS geometry_buffer
-                FROM lyr_arruamento_recortado
-                WHERE id_caixa = '{id_caixa}'
-                ) tmp
-            '''
-
+            sql = self.caixa_sql_query(
+                dist_maxima_arruamento=dist_maxima_arruamento,
+                where_clause=f"id_caixa = '{id_caixa}'")
             query = self.datasource_entrada.ExecuteSQL(sql, dialect="SQLite")
 
             self.get_layer().StartTransaction()
@@ -157,7 +146,7 @@ class AreaCaixa:
                 feature.SetGeometry(row['geometry'])
                 pol_caixa = feature.GetGeometryRef()
 
-                for feat_caixa in self.get_layer():
+                for feat_caixa in self.get_layer(pol_caixa.Buffer(30)):
                     geom_caixa = feat_caixa.GetGeometryRef()
                     if geom_caixa.Intersects(pol_caixa):
                         pol_caixa = pol_caixa.Difference(geom_caixa)

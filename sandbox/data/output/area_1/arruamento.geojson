@@ -1,8 +1,0 @@
-{
-"type": "FeatureCollection",
-"name": "arruamento",
-"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::31982" } },
-"features": [
-{ "type": "Feature", "id": 0, "properties": { "StreetCode": 17 }, "geometry": { "type": "LineString", "coordinates": [ [ 547399.263587456545793, 7757936.476291422732174 ], [ 547406.710528708412312, 7757920.926395572721958 ], [ 547444.077925952966325, 7757851.063224110752344 ] ] } }
-]
-}
