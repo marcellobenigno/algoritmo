@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "areas_caixa",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::31982" } },
+"features": [
+
+]
+}

@@ -108,19 +108,21 @@ class AreaCaixa:
         lyr_arruamento_recortado.SetAttributeFilter(f"id_caixa = '{id_caixa}'")
         sql = self.caixa_sql_query(dist_maxima_arruamento)
         query = self.datasource_entrada.ExecuteSQL(sql, dialect="SQLite")
+
         self.get_layer().StartTransaction()
 
         for row in query:
-            feature = ogr.Feature(self.get_layer().GetLayerDefn())
-            feature.SetGeometry(row['geometry'])
-            pol_caixa_wkt = feature.GetGeometryRef().ExportToWkt()
+            if row['geometry']:
+                feature = ogr.Feature(self.get_layer().GetLayerDefn())
+                feature.SetGeometry(row['geometry'])
+                pol_caixa_wkt = feature.GetGeometryRef().ExportToWkt()
 
-            if not self.check_arruamento_intercepta_caixa(pol_caixa_wkt):
-                feature.SetField('id_caixa', id_caixa)
-                feature.SetField('StreetCode_associado', row['StreetCode_associado'])
-                feature.SetField('market-index', None)
-                self.get_layer().SetFeature(feature)
-                caixa_criada = True
+                if not self.check_arruamento_intercepta_caixa(pol_caixa_wkt):
+                    feature.SetField('id_caixa', id_caixa)
+                    feature.SetField('StreetCode_associado', row['StreetCode_associado'])
+                    feature.SetField('market-index', None)
+                    self.get_layer().SetFeature(feature)
+                    caixa_criada = True
 
         self.get_layer().CommitTransaction()
         self.datasource_entrada.ReleaseResultSet(query)

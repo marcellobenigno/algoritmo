@@ -12,7 +12,7 @@ ogr.UseExceptions()
 
 start_time = time.time()
 
-area = 'area_1'
+area = 'area_2'
 
 input_dir = f'data/input/{area}/'
 output_dir = f'data/output/{area}/'
@@ -119,12 +119,15 @@ layer_lotes = ds_associado.GetLayerByName('layer_lotes')
 
 # realiza a verificação da existência da camada layer_lotes
 if layer_lotes:
+    print('associa streetCode a demandas atravez da camada lote...')
     demandas_street_code = demandas.associa_streetcode_demanda(layer_lotes)
 else:
     # caso não exista, será utlizada a testada como base
+    print('associa streetCode a demandas atravez da geracao da testada...')
     testada = Testada(ds_associado).gerar_testadas()
     demandas_street_code = demandas.associa_streetcode_demanda(testada)
 
+print('recupera streetcodes com demanda...')
 lista_street_code = demandas.recupera_streetcodes_com_demanda()
 
 arruamento = Arruamento(ds_associado)
@@ -132,6 +135,7 @@ arruamento = Arruamento(ds_associado)
 arruamento_recortado_lyr = ds_associado.GetLayer('lyr_arruamento_recortado')
 
 # ordenar arruamentos a partir do comprimento
+print('ordena arruamento por comprimento...')
 arruamentos_ordenados = arruamento.ordena_arruamento_por_comprimento(lista_street_code)
 
 # instancia layer areas_de_caixa (vazio)
@@ -148,10 +152,12 @@ arruamentos_nao_atendidos = []
 distancias_maximas_dict = {}
 # percorrer arruamentos um a um
 #
+print('percorre os arruamentos ordenados...')
 for feature in arruamentos_ordenados:
     # ordenar demandas pela distancia do inicio do arruamento
 
     street_code = feature['StreetCode']
+    print('gera demandas ordenadas por arruamento...')
     demandas_ordenadas = demandas.gera_demandas_ordenadas_por_arruamento(i, street_code)
 
     # atualiza o id do arruamento de forma que ele fique sequencial
@@ -161,6 +167,7 @@ for feature in arruamentos_ordenados:
     dist_maxima_arruamento = demandas.get_maior_distancia_arruamento(demandas_ordenadas, street_code)
     distancias_maximas_dict[street_code] = dist_maxima_arruamento
 
+    print('gera pnt_inicial e final das caixas...')
     dados_pnt_inicial_final = demandas.gera_pnt_inicial_final_id_caixas(demandas_ordenadas, street_code)
 
     for item in dados_pnt_inicial_final:
@@ -170,6 +177,7 @@ for feature in arruamentos_ordenados:
 
         if pnt_inicial and pnt_final:
             # recortar arruamento para servir de 'linha centro' para a caixa
+            print('recorta arruamento...')
             arruamento_recortado = arruamento.recorta_arruamento(
                 pnt_inicial,
                 pnt_final,
@@ -177,24 +185,33 @@ for feature in arruamentos_ordenados:
                 id_caixa
             )
             caixa = areas_caixa.add_area_caixa(id_caixa, dist_maxima_arruamento)
+            print('gerando caixas:', id_caixa, caixa)
             if not caixa:
                 # cria uma lista com o arruamentos onde nao foram geradas caixas
                 arruamentos_nao_atendidos.append(street_code)
 
+print('Sai do loop inicial para geracao das caixas...')
+
 # calcula a soma dos market-index dentro de cada caixa criada
+print('calcula market index...')
 areas_caixa.calcula_market_index()
 
 # Verifica quais demanadas ficaram sem caixa (associado = 0)
+print('atualiza campo associado...')
 demandas.atualiza_campo_associado()
 
 # liga as demandas sem caixa por linhas, as recortando nas interseccoes das caixas
+print('cria linhas de demandas...')
 linhas_demandas = demandas.cria_linhas_demandas()
 
 # atualiza o campo id_caixa, a partir dos ids caixas gerados acima
+print('atualiza campo id_caixa...')
 demandas_ordenadas = demandas.atualiza_campo_id_caixa()
 
+print('lista caixas secundarias...')
 caixas_secundarias = list(set([demanda['id_caixa'] for demanda in demandas_ordenadas if demanda['associado'] == 0]))
-#
+
+print('cria arruamento recortado secundario...')
 arruamentos_recortados_secundarios = arruamento.cria_arruamento_recortado_secundario(caixas_secundarias)
 
 for id_caixa in caixas_secundarias:
@@ -202,9 +219,13 @@ for id_caixa in caixas_secundarias:
     street_code = int(id_caixa.split('.')[0])
     dist_maxima_arruamento = distancias_maximas_dict[street_code]
 
+    print('cria area de caixa secundaria...')
     caixa = areas_caixa.add_area_caixa_secundaria(id_caixa, dist_maxima_arruamento)
 
+print('calcula market index (segunda vez)...')
 areas_caixa.calcula_market_index()
+
+print('atualiza campo associado (segunda vez)...')
 demandas.atualiza_campo_associado()
 
 # TODO
@@ -220,9 +241,8 @@ areas_caixa = ds_associado.GetLayer('areas_de_caixa')
 export_geojson('demandas_ordenadas', demandas_ordenadas, output_dir)
 export_geojson('arruamento_recortado', arruamento_recortado_lyr, output_dir)
 export_geojson('areas_caixa', areas_caixa, output_dir)
-export_geojson('layer_linhas_demandas', linhas_demandas, output_dir)
+# export_geojson('layer_linhas_demandas', linhas_demandas, output_dir)
 
 end_time = time.time()
 total_time = end_time - start_time
 print("Tempo total de processamento:", round(total_time, 2), "segundos")
-

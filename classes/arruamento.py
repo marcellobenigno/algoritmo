@@ -85,11 +85,12 @@ class Arruamento:
         lyr_arruamento_recortado.StartTransaction()
 
         for row in query:
-            feature = ogr.Feature(lyr_arruamento_recortado.GetLayerDefn())
-            feature.SetGeometry(row['geometry'])
-            feature.SetField('StreetCode', streetcode)
-            feature.SetField('id_caixa', id_caixa)
-            lyr_arruamento_recortado.SetFeature(feature)
+            if row['geometry']:
+                feature = ogr.Feature(lyr_arruamento_recortado.GetLayerDefn())
+                feature.SetGeometry(row['geometry'])
+                feature.SetField('StreetCode', streetcode)
+                feature.SetField('id_caixa', id_caixa)
+                lyr_arruamento_recortado.SetFeature(feature)
 
         lyr_arruamento_recortado.CommitTransaction()
         self.datasource_entrada.ReleaseResultSet(query)

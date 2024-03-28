@@ -12,6 +12,7 @@ class Demanda:
         self.datasource_entrada = datasource_entrada
         self.layer = layer
         self.demandas_ordenadas = self.cria_demandas_ordenadas_por_arruamento()
+        self.cria_layer_linhas_demandas()
 
     def __str__(self):
         return self.get_layer().GetName()
@@ -194,15 +195,19 @@ class Demanda:
         lyr_demandas_ordenadas.CommitTransaction()
         return lyr_demandas_ordenadas
 
-    def cria_linhas_demandas(self):
-        lyr_demandas = self.datasource_entrada.GetLayer('layer_demandas_ordenadas')
-        lyr_caixa = self.datasource_entrada.GetLayer('areas_de_caixa')
-        caixa_list = list(set([feat['id_caixa'] for feat in lyr_demandas]))
-
+    def cria_layer_linhas_demandas(self):
         lyr_linhas_demandas = self.datasource_entrada.CreateLayer(
             'layer_linhas_demandas', srs=self.get_srs(), geom_type=ogr.wkbLineString
         )
         lyr_linhas_demandas.CreateField(ogr.FieldDefn('id_caixa', ogr.OFTString))
+
+        return lyr_linhas_demandas
+
+    def cria_linhas_demandas(self):
+        lyr_linhas_demandas = self.datasource_entrada.GetLayer('layer_linhas_demandas')
+        lyr_demandas = self.datasource_entrada.GetLayer('layer_demandas_ordenadas')
+        lyr_caixa = self.datasource_entrada.GetLayer('areas_de_caixa')
+        caixa_list = list(set([feat['id_caixa'] for feat in lyr_demandas]))
 
         for caixa in caixa_list:
             linestring = ogr.Geometry(ogr.wkbLineString)
@@ -232,7 +237,6 @@ class Demanda:
         lista_fids = []
         for ft_linha in lyr_linhas_demandas:
             geom_linha = ft_linha.GetGeometryRef()
-
             geom_raio = geom_linha.Buffer(30)
             lyr_caixa.SetSpatialFilter(geom_raio)
 
@@ -257,6 +261,9 @@ class Demanda:
                         feature.SetGeometry(result)
                         feature.SetField("id_caixa", f"{ft_linha['id_caixa']}")
                         lyr_linhas_demandas.CreateFeature(feature)
+
+                print(f"criada linha da caixa: {ft_linha['id_caixa']}")
+
             lyr_caixa.SetSpatialFilter(None)
             i += 1
 
