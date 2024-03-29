@@ -1,4 +1,3 @@
-import math
 import os
 import time
 
@@ -13,7 +12,7 @@ ogr.UseExceptions()
 
 start_time = time.time()
 
-area = 'area_1'
+area = 'area_3'
 
 input_dir = f'data/input/{area}/'
 output_dir = f'data/output/{area}/'

@@ -235,9 +235,10 @@ class Demanda:
         lyr_demandas.SetAttributeFilter(None)
 
         lista_fids = []
+        lista_linhas_criadas = []
         for ft_linha in lyr_linhas_demandas:
             geom_linha = ft_linha.GetGeometryRef()
-            geom_raio = geom_linha.Buffer(30)
+            geom_raio = geom_linha.Buffer(20)
             lyr_caixa.SetSpatialFilter(geom_raio)
 
             for ft_caixa in lyr_caixa:
@@ -250,24 +251,30 @@ class Demanda:
                         linestrings = multi.geoms
                         i = 1
                         for linestring in linestrings:
-                            feature = ogr.Feature(lyr_linhas_demandas.GetLayerDefn())
-                            line = ogr.CreateGeometryFromWkt(linestring.wkt)
-                            feature.SetGeometry(line)
-                            feature.SetField("id_caixa", f"{ft_linha['id_caixa']}.{i}")
-                            lyr_linhas_demandas.CreateFeature(feature)
-                            i += 1
+                            id = f"{ft_linha['id_caixa']}.{i}"
+                            if id not in lista_linhas_criadas:
+                                print('cria linha:', id)
+                                feature = ogr.Feature(lyr_linhas_demandas.GetLayerDefn())
+                                line = ogr.CreateGeometryFromWkt(linestring.wkt)
+                                feature.SetGeometry(line)
+                                feature.SetField("id_caixa", id)
+                                lyr_linhas_demandas.CreateFeature(feature)
+                                lista_linhas_criadas.append(id)
+                                i += 1
                     else:
-                        feature = ogr.Feature(lyr_linhas_demandas.GetLayerDefn())
-                        feature.SetGeometry(result)
-                        feature.SetField("id_caixa", f"{ft_linha['id_caixa']}")
-                        lyr_linhas_demandas.CreateFeature(feature)
-
-                print(f"criada linha da caixa: {ft_linha['id_caixa']}")
+                        id = f"{ft_linha['id_caixa']}"
+                        if id not in lista_linhas_criadas:
+                            print('cria linha:', id)
+                            feature = ogr.Feature(lyr_linhas_demandas.GetLayerDefn())
+                            feature.SetGeometry(result)
+                            feature.SetField("id_caixa", id)
+                            lyr_linhas_demandas.CreateFeature(feature)
+                            lista_linhas_criadas.append(id)
 
             lyr_caixa.SetSpatialFilter(None)
             i += 1
 
-        for fid in lista_fids:
+        for fid in list(set(lista_fids)):
             lyr_linhas_demandas.DeleteFeature(fid)
 
         return lyr_linhas_demandas
