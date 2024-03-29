@@ -239,14 +239,9 @@ print('calcula market index (terceira vez)...')
 areas_caixa.calcula_market_index()
 
 # TODO
-# Pegar demandas órfãns -> pegar da mesma rua
-
-# demandas.reassocia_demandas_orfans()
-
 # percorrer as demandas até a metade do valor total de market-index
 # Elimina a caixa existente
 # REGRA testar o tamanho da caixa (não pode gerar maior que 180 metros) importante!!!!
-
 
 areas_caixa = ds_associado.GetLayer('areas_de_caixa')
 # ----------------------------------------------------------
