@@ -1,3 +1,4 @@
+import math
 import os
 
 from osgeo import ogr
@@ -27,6 +28,7 @@ class AreaCaixa:
         layer.CreateField(ogr.FieldDefn('id_caixa', ogr.OFTString))
         layer.CreateField(ogr.FieldDefn('StreetCode_associado', ogr.OFTInteger))
         layer.CreateField(ogr.FieldDefn('market-index', ogr.OFTReal))
+        layer.CreateField(ogr.FieldDefn('dist_max', ogr.OFTReal))
         return layer
 
     def get_srs(self):
@@ -121,6 +123,7 @@ class AreaCaixa:
                     feature.SetField('id_caixa', id_caixa)
                     feature.SetField('StreetCode_associado', row['StreetCode_associado'])
                     feature.SetField('market-index', None)
+                    feature.SetField('dist_max', dist_maxima_arruamento)
                     self.get_layer().SetFeature(feature)
                     caixa_criada = True
 
@@ -159,6 +162,7 @@ class AreaCaixa:
                 feature.SetField('id_caixa', id_caixa)
                 feature.SetField('StreetCode_associado', row['StreetCode_associado'])
                 feature.SetField('market-index', None)
+                feature.SetField('dist_max', dist_maxima_arruamento)
                 self.get_layer().SetFeature(feature)
                 caixa_criada = True
 
@@ -167,3 +171,74 @@ class AreaCaixa:
         lyr_arruamento_recortado.SetAttributeFilter(None)
 
         return caixa_criada
+
+    def absorve_demandas_sem_caixa(self):
+        lyr_demandas = self.datasource_entrada.GetLayer('layer_demandas_ordenadas')
+        lyr_demandas.SetAttributeFilter('associado = 0')
+
+        caixas_delete_list = []
+
+        for demanda in lyr_demandas:
+            geom_demanda = demanda.GetGeometryRef()
+            areas_caixa = self.get_layer(geom_demanda.Buffer(20))
+            areas_caixa.SetAttributeFilter(f''' StreetCode_associado = {demanda['StreetCode']} ''')
+            for caixa in areas_caixa:
+                geom_caixa = caixa.GetGeometryRef()
+
+                min_dist = float('inf')
+                caixa_mais_proxima = None
+
+                distance = geom_demanda.Distance(geom_caixa)
+
+                if distance < min_dist:
+                    min_dist = distance
+                    caixa_mais_proxima = caixa
+                    fid = caixa_mais_proxima.GetFID()
+                    caixas_delete_list.append(fid)
+
+            arruamento_recortado = self.datasource_entrada.GetLayer('lyr_arruamento_recortado')
+
+            arruamento_recortado.SetAttributeFilter(f''' id_caixa =  '{caixa_mais_proxima["id_caixa"]}' ''')
+            feat = arruamento_recortado.GetNextFeature()
+            line = feat.GetGeometryRef()
+
+            index_ultimo_ponto = line.GetPointCount() - 1
+            ultimo_ponto_x, ultimo_ponto_y, _ = line.GetPoint(index_ultimo_ponto)
+
+            # Calcula a direcao da linha a partir do penultimo ponto
+            penultimo_ponto_x, penultimo_ponto_y, _ = line.GetPoint(index_ultimo_ponto - 1)
+            direcao_x = ultimo_ponto_x - penultimo_ponto_x
+            direcao_y = ultimo_ponto_y - penultimo_ponto_y
+
+            # Normaliza a direcao
+            length = math.sqrt(direcao_x ** 2 + direcao_y ** 2)
+            direcao_x /= length
+            direcao_y /= length
+
+            # aumenta o comprimento da linha com a dist. min + 0.2m
+            novo_vertice_x = ultimo_ponto_x + (min_dist + 0.2) * direcao_x
+            novo_vertice_y = ultimo_ponto_y + (min_dist + 0.2) * direcao_y
+
+            # adiciona o vertice
+            line.AddPoint(novo_vertice_x, novo_vertice_y)
+            line.FlattenTo2D()
+
+        # atualiza a geometria da linha
+        if line:
+            feat.SetGeometry(line)
+            arruamento_recortado.SetFeature(feat)
+            id_caixa = caixa_mais_proxima['id_caixa']
+            dist_maxima_arruamento = caixa_mais_proxima['dist_max']
+            self.add_area_caixa_secundaria(id_caixa, dist_maxima_arruamento)
+            caixas_delete_list.append(caixa_mais_proxima.GetFID())
+
+        lyr = self.get_layer(bbox=None)
+        lyr.SetAttributeFilter(None)
+
+        lyr_demandas.SetSpatialFilter(None)
+        lyr_demandas.SetAttributeFilter(None)
+
+        for fid in list(set(caixas_delete_list)):
+            self.get_layer().DeleteFeature(fid)
+
+        return id_caixa, line

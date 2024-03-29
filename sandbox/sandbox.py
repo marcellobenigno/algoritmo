@@ -1,3 +1,4 @@
+import math
 import os
 import time
 
@@ -12,7 +13,7 @@ ogr.UseExceptions()
 
 start_time = time.time()
 
-area = 'area_2'
+area = 'area_1'
 
 input_dir = f'data/input/{area}/'
 output_dir = f'data/output/{area}/'
@@ -219,7 +220,7 @@ for id_caixa in caixas_secundarias:
     street_code = int(id_caixa.split('.')[0])
     dist_maxima_arruamento = distancias_maximas_dict[street_code]
 
-    print('cria area de caixa secundaria...')
+    print('cria area de caixa secundaria...', id_caixa)
     caixa = areas_caixa.add_area_caixa_secundaria(id_caixa, dist_maxima_arruamento)
 
 print('calcula market index (segunda vez)...')
@@ -228,20 +229,32 @@ areas_caixa.calcula_market_index()
 print('atualiza campo associado (segunda vez)...')
 demandas.atualiza_campo_associado()
 
+print('absorve demandas sem caixa...')
+areas_caixa.absorve_demandas_sem_caixa()
+
+print('atualiza campo associado (terceira vez)...')
+demandas.atualiza_campo_associado()
+
+print('calcula market index (terceira vez)...')
+areas_caixa.calcula_market_index()
+
 # TODO
 # Pegar demandas órfãns -> pegar da mesma rua
+
+# demandas.reassocia_demandas_orfans()
+
 # percorrer as demandas até a metade do valor total de market-index
 # Elimina a caixa existente
 # REGRA testar o tamanho da caixa (não pode gerar maior que 180 metros) importante!!!!
 
-areas_caixa = ds_associado.GetLayer('areas_de_caixa')
 
+areas_caixa = ds_associado.GetLayer('areas_de_caixa')
 # ----------------------------------------------------------
 
 export_geojson('demandas_ordenadas', demandas_ordenadas, output_dir)
 export_geojson('arruamento_recortado', arruamento_recortado_lyr, output_dir)
 export_geojson('areas_caixa', areas_caixa, output_dir)
-# export_geojson('layer_linhas_demandas', linhas_demandas, output_dir)
+export_geojson('layer_linhas_demandas', linhas_demandas, output_dir)
 
 end_time = time.time()
 total_time = end_time - start_time
