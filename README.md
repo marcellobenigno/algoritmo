@@ -18,4 +18,4 @@ ATENÇÃO! ESTA FUNÇÃO TEM UM PROBLEMA! ESTÁ REPETINDO O PROCESSO
 ['10.1', '15.1', '9.1', '16.1', '10.1.1', '10.1.2', '15.1.1', '15.1.2', '15.1.3', '10.1.1', '15.1.1']
 ```
 
-### O mesmo código está na brach `tratamento-de-erros`
+### O mesmo código está na branch `tratamento-de-erros`
