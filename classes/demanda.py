@@ -235,13 +235,17 @@ class Demanda:
         lyr_demandas.SetAttributeFilter(None)
 
         lista_fids = []
-        lista_linhas_criadas = []
+        lista_linhas = []
+
         for ft_linha in lyr_linhas_demandas:
+            lista_linhas.append(ft_linha['id_caixa'])
             geom_linha = ft_linha.GetGeometryRef()
             geom_raio = geom_linha.Buffer(20)
             lyr_caixa.SetSpatialFilter(geom_raio)
 
+            i = 1
             for ft_caixa in lyr_caixa:
+
                 geom_caixa = ft_caixa.GetGeometryRef()
                 if geom_linha.Intersects(geom_caixa):
                     lista_fids.append(ft_linha.GetFID())
@@ -249,33 +253,33 @@ class Demanda:
                     if result.GetGeometryType() == ogr.wkbMultiLineString:
                         multi = MultiLineString(loads(result.ExportToWkt()))
                         linestrings = multi.geoms
-                        i = 1
                         for linestring in linestrings:
                             id = f"{ft_linha['id_caixa']}.{i}"
-                            if id not in lista_linhas_criadas:
-                                print('cria linha:', id)
-                                feature = ogr.Feature(lyr_linhas_demandas.GetLayerDefn())
-                                line = ogr.CreateGeometryFromWkt(linestring.wkt)
-                                feature.SetGeometry(line)
-                                feature.SetField("id_caixa", id)
-                                lyr_linhas_demandas.CreateFeature(feature)
-                                lista_linhas_criadas.append(id)
-                                i += 1
-                    else:
-                        id = f"{ft_linha['id_caixa']}"
-                        if id not in lista_linhas_criadas:
                             print('cria linha:', id)
                             feature = ogr.Feature(lyr_linhas_demandas.GetLayerDefn())
-                            feature.SetGeometry(result)
+                            line = ogr.CreateGeometryFromWkt(linestring.wkt)
+                            feature.SetGeometry(line)
                             feature.SetField("id_caixa", id)
                             lyr_linhas_demandas.CreateFeature(feature)
-                            lista_linhas_criadas.append(id)
+                            i += 1
+
+                    else:
+                        id = f"{ft_linha['id_caixa']}"
+                        print('cria linha:', id)
+                        feature = ogr.Feature(lyr_linhas_demandas.GetLayerDefn())
+                        feature.SetGeometry(result)
+                        feature.SetField("id_caixa", id)
+                        lyr_linhas_demandas.CreateFeature(feature)
 
             lyr_caixa.SetSpatialFilter(None)
             i += 1
 
         for fid in list(set(lista_fids)):
             lyr_linhas_demandas.DeleteFeature(fid)
+
+        print('*' * 20)
+        print('ATENÇÃO! ESTA FUNÇÃO TEM UM PROBLEMA! ESTÁ REPETINDO O PROCESSO \n', lista_linhas)
+        print('*' * 20)
 
         return lyr_linhas_demandas
 
@@ -297,33 +301,5 @@ class Demanda:
 
         lyr_demandas_ordenadas.CommitTransaction()
         lyr_demandas_ordenadas.SetAttributeFilter(None)
-
-        return lyr_demandas_ordenadas
-
-    def atualiza_distancias_arruamento(self, streetcode):
-        sql = f'''
-                SELECT id_demanda, ST_Distance(d.geometry, a.geometry) AS dist_arruamento, geometry
-                FROM layer_arruamento a,
-                     layer_demandas_ordenadas d
-                WHERE a.StreetCode = {streetcode}
-                  AND d.StreetCode = {streetcode}
-                  AND d.associado = 0
-                ORDER BY st_line_locate_point(a.geometry, st_closestpoint(a.geometry, d.geometry))
-            '''
-        query = self.datasource_entrada.ExecuteSQL(sql, dialect="SQLite")
-
-        lyr_demandas_ordenadas = self.datasource_entrada.GetLayer('layer_demandas_ordenadas')
-        lyr_demandas_ordenadas.StartTransaction()
-
-        for demanda in lyr_demandas_ordenadas:
-            for row in query:
-                if demanda['id_demanda'] == row['id_demanda']:
-                    demanda.SetField('dist_arruamento', row['dist_arruamento'])
-                    print(demanda.id_demanda, row['dist_arruamento'])
-
-                    # lyr_demandas_ordenadas.SetFeature(demanda)
-
-        # lyr_demandas_ordenadas.CommitTransaction()
-        self.datasource_entrada.ReleaseResultSet(query)
 
         return lyr_demandas_ordenadas

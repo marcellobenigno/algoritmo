@@ -12,7 +12,7 @@ ogr.UseExceptions()
 
 start_time = time.time()
 
-area = 'area_3'
+area = 'area_1'
 
 input_dir = f'data/input/{area}/'
 output_dir = f'data/output/{area}/'
@@ -222,11 +222,11 @@ for id_caixa in caixas_secundarias:
     print('cria area de caixa secundaria...', id_caixa)
     caixa = areas_caixa.add_area_caixa_secundaria(id_caixa, dist_maxima_arruamento)
 
-print('calcula market index (segunda vez)...')
-areas_caixa.calcula_market_index()
-
 print('atualiza campo associado (segunda vez)...')
 demandas.atualiza_campo_associado()
+
+print('calcula market index (segunda vez)...')
+areas_caixa.calcula_market_index()
 
 print('absorve demandas sem caixa...')
 areas_caixa.absorve_demandas_sem_caixa()
