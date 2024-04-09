@@ -1,8 +1,6 @@
 from collections import defaultdict
 
 from osgeo import ogr
-from shapely.geometry import MultiLineString
-from shapely.wkt import loads
 
 ogr.UseExceptions()
 
@@ -40,7 +38,7 @@ class Demanda:
         return self.get_layer()
 
     def recupera_streetcodes_com_demanda(self):
-        return list(set([feature['StreetCode'] for feature in self.get_layer()]))
+        return list(set([feature['StreetCode'] for feature in self.get_layer() if feature['StreetCode'] is not None]))
 
     def get_indice_espacial(self, layer_com_street_code):
         spatial_index = {}
@@ -203,16 +201,17 @@ class Demanda:
 
         return lyr_linhas_demandas
 
-    def cria_linhas_demandas(self):
-        lyr_linhas_demandas = self.datasource_entrada.GetLayer('layer_linhas_demandas')
+    def atualiza_id_caixa_demandas(self):
         lyr_demandas = self.datasource_entrada.GetLayer('layer_demandas_ordenadas')
-        lyr_caixa = self.datasource_entrada.GetLayer('areas_de_caixa')
-        caixa_list = list(set([feat['id_caixa'] for feat in lyr_demandas]))
+        areas_caixa = self.datasource_entrada.GetLayer('areas_de_caixa')
+        id_caixa_list = list(set([feat['id_caixa'] for feat in lyr_demandas]))
 
-        for caixa in caixa_list:
-            linestring = ogr.Geometry(ogr.wkbLineString)
-            lyr_demandas.SetAttributeFilter(f"associado = 0 AND id_caixa = '{caixa}'")
+        lyr_demandas.StartTransaction()
+
+        for id_caixa in id_caixa_list:
+            lyr_demandas.SetAttributeFilter(f"id_caixa = '{id_caixa}' AND associado = 0")
             lista_fids = [fc.GetFID() for fc in lyr_demandas]
+            linestring = ogr.Geometry(ogr.wkbLineString)
 
             for i, val in enumerate(lista_fids):
                 if i + 1 < len(lista_fids):
@@ -226,62 +225,119 @@ class Demanda:
                     linestring.AddPoint(geom_next.GetX(), geom_next.GetY())
                     linestring.FlattenTo2D()
 
-            if not linestring.IsEmpty():
-                feature = ogr.Feature(lyr_linhas_demandas.GetLayerDefn())
-                feature.SetGeometry(linestring)
-                feature.SetField("id_caixa", caixa)
-                lyr_linhas_demandas.CreateFeature(feature)
+                    areas_caixa.SetSpatialFilter(linestring)
 
+                    if areas_caixa.GetFeatureCount() > 0:
+
+                        for caixa in areas_caixa:
+                            caixa_geom = caixa.GetGeometryRef()
+                            if caixa_geom.Intersects(linestring):
+                                # demandas antes da caixa interceptada:
+                                lyr_demandas.SetAttributeFilter(
+                                    f"id_caixa = '{id_caixa}' AND associado = 0 AND id <= {feature_current['id']}"
+                                )
+                                for demanda in lyr_demandas:
+                                    demanda.SetField("id_caixa", f'{id_caixa}.1')
+                                    lyr_demandas.SetFeature(demanda)
+
+                                # demandas depois da caixa interceptada:
+                                lyr_demandas.SetAttributeFilter(
+                                    f"id_caixa = '{id_caixa}' AND associado = 0 AND id > {feature_current['id']}"
+                                )
+                                for demanda in lyr_demandas:
+                                    demanda.SetField("id_caixa", f'{id_caixa}.2')
+                                    lyr_demandas.SetFeature(demanda)
+                        break
+
+        lyr_demandas.CommitTransaction()
         lyr_demandas.SetAttributeFilter(None)
+        areas_caixa.SetSpatialFilter(None)
 
-        lista_fids = []
-        lista_linhas = []
-
-        for ft_linha in lyr_linhas_demandas:
-            lista_linhas.append(ft_linha['id_caixa'])
-            geom_linha = ft_linha.GetGeometryRef()
-            geom_raio = geom_linha.Buffer(20)
-            lyr_caixa.SetSpatialFilter(geom_raio)
-
-            i = 1
-            for ft_caixa in lyr_caixa:
-
-                geom_caixa = ft_caixa.GetGeometryRef()
-                if geom_linha.Intersects(geom_caixa):
-                    lista_fids.append(ft_linha.GetFID())
-                    result = geom_linha.Difference(geom_caixa)
-                    if result.GetGeometryType() == ogr.wkbMultiLineString:
-                        multi = MultiLineString(loads(result.ExportToWkt()))
-                        linestrings = multi.geoms
-                        for linestring in linestrings:
-                            id = f"{ft_linha['id_caixa']}.{i}"
-                            print('cria linha:', id)
-                            feature = ogr.Feature(lyr_linhas_demandas.GetLayerDefn())
-                            line = ogr.CreateGeometryFromWkt(linestring.wkt)
-                            feature.SetGeometry(line)
-                            feature.SetField("id_caixa", id)
-                            lyr_linhas_demandas.CreateFeature(feature)
-                            i += 1
-
-                    else:
-                        id = f"{ft_linha['id_caixa']}"
-                        print('cria linha:', id)
-                        feature = ogr.Feature(lyr_linhas_demandas.GetLayerDefn())
-                        feature.SetGeometry(result)
-                        feature.SetField("id_caixa", id)
-                        lyr_linhas_demandas.CreateFeature(feature)
-
-            lyr_caixa.SetSpatialFilter(None)
-            i += 1
-
-        for fid in list(set(lista_fids)):
-            lyr_linhas_demandas.DeleteFeature(fid)
-
-        print('*' * 20)
-        print('ATENÇÃO! ESTA FUNÇÃO TEM UM PROBLEMA! ESTÁ REPETINDO O PROCESSO \n', lista_linhas)
-        print('*' * 20)
-
-        return lyr_linhas_demandas
+    # def cria_linhas_demandas(self):
+    #     lyr_linhas_demandas = self.datasource_entrada.GetLayer('layer_linhas_demandas')
+    #     lyr_demandas = self.datasource_entrada.GetLayer('layer_demandas_ordenadas')
+    #     lyr_caixa = self.datasource_entrada.GetLayer('areas_de_caixa')
+    #     caixa_list = list(set([feat['id_caixa'] for feat in lyr_demandas]))
+    #
+    #     for caixa in caixa_list:
+    #         linestring = ogr.Geometry(ogr.wkbLineString)
+    #         lyr_demandas.SetAttributeFilter(f"associado = 0 AND id_caixa = '{caixa}'")
+    #         lista_fids = [fc.GetFID() for fc in lyr_demandas]
+    #
+    #         for i, val in enumerate(lista_fids):
+    #             if i + 1 < len(lista_fids):
+    #                 feature_current = lyr_demandas.GetFeature(lista_fids[i])
+    #                 feature_next = lyr_demandas.GetFeature(lista_fids[i + 1])
+    #
+    #                 geom_current = feature_current.GetGeometryRef()
+    #                 geom_next = feature_next.GetGeometryRef()
+    #
+    #                 linestring.AddPoint(geom_current.GetX(), geom_current.GetY())
+    #                 linestring.AddPoint(geom_next.GetX(), geom_next.GetY())
+    #                 linestring.FlattenTo2D()
+    #
+    #         if not linestring.IsEmpty():
+    #             feature = ogr.Feature(lyr_linhas_demandas.GetLayerDefn())
+    #             feature.SetGeometry(linestring)
+    #             feature.SetField("id_caixa", caixa)
+    #             lyr_linhas_demandas.CreateFeature(feature)
+    #
+    #     lyr_demandas.SetAttributeFilter(None)
+    #
+    #     lista_fids = []
+    #     lista_linhas = []
+    #     lista = []
+    #
+    #     for ft_linha in lyr_linhas_demandas:
+    #         lista_linhas.append(ft_linha['id_caixa'])
+    #         geom_linha = ft_linha.GetGeometryRef()
+    #         geom_raio = geom_linha.Buffer(20)
+    #         lyr_caixa.SetSpatialFilter(geom_raio)
+    #
+    #         i = 1
+    #         for ft_caixa in lyr_caixa:
+    #             geom_caixa = ft_caixa.GetGeometryRef()
+    #             if geom_linha.Intersects(geom_caixa):
+    #                 result = geom_linha.Difference(geom_caixa)
+    #                 if result.GetGeometryType() == ogr.wkbMultiLineString:
+    #                     multi = MultiLineString(loads(result.ExportToWkt()))
+    #                     linestrings = multi.geoms
+    #                     for linestring in linestrings:
+    #                         id = f"{ft_linha['id_caixa']}.{i}"
+    #                         if id not in lista:
+    #                             lista_fids.append(ft_linha.GetFID())
+    #                             print('cria linha:', id)
+    #                             feature = ogr.Feature(lyr_linhas_demandas.GetLayerDefn())
+    #                             line = ogr.CreateGeometryFromWkt(linestring.wkt)
+    #                             feature.SetGeometry(line)
+    #                             feature.SetField("id_caixa", id)
+    #                             lyr_linhas_demandas.CreateFeature(feature)
+    #                             lista.append(id)
+    #                         i += 1
+    #                         break
+    #
+    #                 else:
+    #                     id = f"{ft_linha['id_caixa']}"
+    #                     if id not in lista:
+    #                         print('cria linha:', id)
+    #                         feature = ogr.Feature(lyr_linhas_demandas.GetLayerDefn())
+    #                         feature.SetGeometry(result)
+    #                         feature.SetField("id_caixa", id)
+    #                         lyr_linhas_demandas.CreateFeature(feature)
+    #                         lista.append(id)
+    #
+    #         lyr_caixa.SetSpatialFilter(None)
+    #
+    #     print(lista)
+    #
+    #     for fid in list(set(lista_fids)):
+    #         lyr_linhas_demandas.DeleteFeature(fid)
+    #
+    #     print('*' * 20)
+    #     print('ATENÇÃO! ESTA FUNÇÃO TEM UM PROBLEMA! ESTÁ REPETINDO O PROCESSO \n', sorted(lista_linhas))
+    #     print('*' * 20)
+    #
+    #     return lyr_linhas_demandas
 
     def atualiza_campo_id_caixa(self):
         lyr_demandas_ordenadas = self.datasource_entrada.GetLayer('layer_demandas_ordenadas')

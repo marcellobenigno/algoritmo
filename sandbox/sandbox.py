@@ -202,7 +202,7 @@ demandas.atualiza_campo_associado()
 
 # liga as demandas sem caixa por linhas, as recortando nas interseccoes das caixas
 print('cria linhas de demandas...')
-linhas_demandas = demandas.cria_linhas_demandas()
+linhas_demandas = demandas.atualiza_id_caixa_demandas()
 
 # atualiza o campo id_caixa, a partir dos ids caixas gerados acima
 print('atualiza campo id_caixa...')
@@ -239,6 +239,11 @@ areas_caixa.calcula_market_index()
 
 # TODO
 # percorrer as demandas até a metade do valor total de market-index
+
+areas_caixa.divide_caixa()
+
+
+
 # Elimina a caixa existente
 # REGRA testar o tamanho da caixa (não pode gerar maior que 180 metros) importante!!!!
 
@@ -248,7 +253,7 @@ areas_caixa = ds_associado.GetLayer('areas_de_caixa')
 export_geojson('demandas_ordenadas', demandas_ordenadas, output_dir)
 export_geojson('arruamento_recortado', arruamento_recortado_lyr, output_dir)
 export_geojson('areas_caixa', areas_caixa, output_dir)
-export_geojson('layer_linhas_demandas', linhas_demandas, output_dir)
+# export_geojson('layer_linhas_demandas', linhas_demandas, output_dir)
 
 end_time = time.time()
 total_time = end_time - start_time

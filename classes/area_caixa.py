@@ -242,3 +242,25 @@ class AreaCaixa:
             self.get_layer().DeleteFeature(fid)
 
         return id_caixa, line
+
+    def divide_caixa(self):
+        sql = '''
+                SELECT a.id_caixa,
+                       a."market_index" AS caixa_market_index,
+                       b.id, 
+                       b.id_demanda, 
+                       b."StreetCode", 
+                       b."market-index",
+                       b.geometry
+                FROM  areas_de_caixa a, layer_demandas_ordenadas b
+                WHERE a."market-index" > 8 
+                AND ST_Contains(a.geometry, b.geometry)
+                '''
+
+        query = self.datasource_entrada.ExecuteSQL(sql, dialect="SQLite")
+
+        for row in query:
+            print(row['id_caixa'], row['id'])
+
+        self.datasource_entrada.ReleaseResultSet(query)
+
