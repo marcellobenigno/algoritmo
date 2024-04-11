@@ -243,24 +243,51 @@ class AreaCaixa:
 
         return id_caixa, line
 
+
+
+    def identifica_caixas_maiores_8(self):
+        ...
+
+
     def divide_caixa(self):
+        self.datasource_entrada.CopyLayer(
+            self.get_layer(), 'caixas_tmp'
+        )
+
         sql = '''
-                SELECT a.id_caixa,
-                       a."market_index" AS caixa_market_index,
-                       b.id, 
-                       b.id_demanda, 
-                       b."StreetCode", 
-                       b."market-index",
-                       b.geometry
-                FROM  areas_de_caixa a, layer_demandas_ordenadas b
-                WHERE a."market-index" > 8 
-                AND ST_Contains(a.geometry, b.geometry)
-                '''
+            SELECT
+                   a."market-index" AS caixa_market_index,
+                   b.id,
+                   b.id_demanda,
+                   b."StreetCode",
+                   b."market-index",
+                   b.geometry
+            FROM  caixas_tmp a, layer_demandas_ordenadas b
+            WHERE caixa_market_index > 8
+            AND ST_Contains(a.geometry, b.geometry)
+        '''
 
         query = self.datasource_entrada.ExecuteSQL(sql, dialect="SQLite")
 
+        acum = 0
+        demandas_limite = []
         for row in query:
-            print(row['id_caixa'], row['id'])
+            acum += row['market-index']
+            if acum <= row['caixa_market_index'] / 2:
+                demandas_limite.append(row['id'])
+
+
+        print(demandas_limite)
+
+        for id_demanda in demandas_limite:
+            sql = f'''
+                SELECT
+                       
+                FROM  lyr_arruamento_recortado a, layer_demandas_ordenadas b
+                WHERE b.id = {id_demanda}
+                AND ST_Contains(a.geometry, b.geometry)
+            '''
 
         self.datasource_entrada.ReleaseResultSet(query)
+        self.datasource_entrada.DeleteLayer('caixas_tmp')
 
