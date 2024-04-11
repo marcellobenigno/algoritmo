@@ -145,7 +145,6 @@ demandas_ordenadas = None
 
 # utilizado para criar um id unico para cada demanda
 i = 1
-
 # lista dos arruamentos sem caixa
 arruamentos_nao_atendidos = []
 
@@ -158,17 +157,17 @@ for feature in arruamentos_ordenados:
 
     street_code = feature['StreetCode']
     print('gera demandas ordenadas por arruamento...')
-    demandas_ordenadas = demandas.gera_demandas_ordenadas_por_arruamento(i, street_code)
+    demandas_ordenadas = demandas.get_demandas_ordenadas_por_arruamento(i, street_code)
 
     # atualiza o id do arruamento de forma que ele fique sequencial
     i = demandas_ordenadas.GetFeatureCount() + 1
 
     # obtem a dist. maxima p/ utilizar na criacao da caixa:
-    dist_maxima_arruamento = demandas.get_maior_distancia_arruamento(demandas_ordenadas, street_code)
+    dist_maxima_arruamento = demandas.get_maior_distancia_arruamento(street_code)
     distancias_maximas_dict[street_code] = dist_maxima_arruamento
 
     print('gera pnt_inicial e final das caixas...')
-    dados_pnt_inicial_final = demandas.gera_pnt_inicial_final_id_caixas(demandas_ordenadas, street_code)
+    dados_pnt_inicial_final = demandas.get_pnt_inicial_final_id_caixas(demandas_ordenadas, street_code)
 
     for item in dados_pnt_inicial_final:
         id_caixa = item.get('id_caixa')
@@ -212,7 +211,7 @@ print('lista caixas secundarias...')
 caixas_secundarias = list(set([demanda['id_caixa'] for demanda in demandas_ordenadas if demanda['associado'] == 0]))
 
 print('cria arruamento recortado secundario...')
-arruamentos_recortados_secundarios = arruamento.cria_arruamento_recortado_secundario(caixas_secundarias)
+arruamentos_recortados_secundarios = arruamento.get_arruamento_recortado_secundario(caixas_secundarias)
 
 for id_caixa in caixas_secundarias:
     # pega os pontos por caixa:
@@ -240,9 +239,33 @@ areas_caixa.calcula_market_index()
 # TODO
 # percorrer as demandas até a metade do valor total de market-index
 
-areas_caixa.divide_caixa()
+caixas_maiores_8 = areas_caixa.get_caixa_maiores_8()
+
+for caixa in caixas_maiores_8:
+    pnt_inicial = caixa['demandas'][0]
+    pnt_final = caixa['demandas'][-1]
+    street_code = caixa['street_code']
+    id_caixa = caixa['id_caixa']
 
 
+    # arruamento_recortado = arruamento.recorta_arruamento(
+    #     pnt_inicial,
+    #     pnt_final,
+    #     street_code,
+    #     id_caixa
+    # )
+    #
+    #
+    # dist_maxima_arruamento = demandas.get_maior_distancia_arruamento(
+    #     caixa['street_code'], lista_demandas=caixa['demandas']
+    # )
+
+
+
+    print(dist_maxima_arruamento)
+    # dist_maxima_arruamento = demandas.get_maior_distancia_arruamento(street_code)
+    # distancias_maximas_dict[street_code] = dist_maxima_arruamento
+    # print(caixa['street_code'])
 
 # Elimina a caixa existente
 # REGRA testar o tamanho da caixa (não pode gerar maior que 180 metros) importante!!!!

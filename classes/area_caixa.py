@@ -243,51 +243,32 @@ class AreaCaixa:
 
         return id_caixa, line
 
-
-
     def identifica_caixas_maiores_8(self):
-        ...
+        self.get_layer().SetAttributeFilter(' "market-index" > 8')
+        id_caixas_list = [(caixa['id_caixa'], caixa['market-index']) for caixa in self.get_layer()]
+        self.get_layer().SetAttributeFilter(None)
+        return id_caixas_list
 
+    def get_caixa_maiores_8(self):
+        id_caixas_maiores_8 = self.identifica_caixas_maiores_8()
+        demandas_ordenadas = self.datasource_entrada.GetLayer('layer_demandas_ordenadas')
+        street_code_caixa_demandas = []
 
-    def divide_caixa(self):
-        self.datasource_entrada.CopyLayer(
-            self.get_layer(), 'caixas_tmp'
-        )
+        for id_caixa, caixa_market_index in id_caixas_maiores_8:
+            street_code = id_caixa.split('.')[0]
+            demandas_ordenadas.SetAttributeFilter(f"id_caixa = '{id_caixa}'")
+            lista_demandas = []
+            acum = 0
 
-        sql = '''
-            SELECT
-                   a."market-index" AS caixa_market_index,
-                   b.id,
-                   b.id_demanda,
-                   b."StreetCode",
-                   b."market-index",
-                   b.geometry
-            FROM  caixas_tmp a, layer_demandas_ordenadas b
-            WHERE caixa_market_index > 8
-            AND ST_Contains(a.geometry, b.geometry)
-        '''
+            for demanda in demandas_ordenadas:
+                acum += demanda['market-index']
+                if acum <= caixa_market_index / 2:
+                    lista_demandas.append(demanda['id'])
+                else:
+                    break  # Se já ultrapassou metade do índice da caixa, não precisa continuar
+            caixa = {'street_code': street_code, 'id_caixa': id_caixa, 'demandas': lista_demandas}
+            street_code_caixa_demandas.append(caixa)
 
-        query = self.datasource_entrada.ExecuteSQL(sql, dialect="SQLite")
+        demandas_ordenadas.SetAttributeFilter(None)
 
-        acum = 0
-        demandas_limite = []
-        for row in query:
-            acum += row['market-index']
-            if acum <= row['caixa_market_index'] / 2:
-                demandas_limite.append(row['id'])
-
-
-        print(demandas_limite)
-
-        for id_demanda in demandas_limite:
-            sql = f'''
-                SELECT
-                       
-                FROM  lyr_arruamento_recortado a, layer_demandas_ordenadas b
-                WHERE b.id = {id_demanda}
-                AND ST_Contains(a.geometry, b.geometry)
-            '''
-
-        self.datasource_entrada.ReleaseResultSet(query)
-        self.datasource_entrada.DeleteLayer('caixas_tmp')
-
+        return street_code_caixa_demandas

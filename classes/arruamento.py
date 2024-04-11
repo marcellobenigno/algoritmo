@@ -97,7 +97,7 @@ class Arruamento:
 
         return lyr_arruamento_recortado
 
-    def cria_arruamento_recortado_secundario(self, caixas_secundarias):
+    def get_arruamento_recortado_secundario(self, caixas_secundarias):
         lyr_arruamento_recortado = self.datasource_entrada.GetLayer('lyr_arruamento_recortado')
         self.datasource_entrada.CopyLayer(
             lyr_arruamento_recortado,

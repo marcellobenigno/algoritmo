@@ -73,7 +73,7 @@ class Demanda:
         layer.CreateField(ogr.FieldDefn('associado', ogr.OFTInteger))
         return layer
 
-    def gera_demandas_ordenadas_por_arruamento(self, i, streetcode):
+    def get_demandas_ordenadas_por_arruamento(self, i, streetcode):
         sql = f'''    
                  SELECT
                    id_demanda, 
@@ -127,22 +127,27 @@ class Demanda:
 
             return self.datasource_entrada.GetLayer('layer_demandas_ordenadas')
 
-    def get_maior_distancia_arruamento(self, demandas_ordenadas, street_code):
+    def get_maior_distancia_arruamento(self, street_code, lista_demandas=None):
+        max_dist_arruamento = 0
+
         sql = f'''
                     SELECT max(dist_arruamento) AS max_dist_arruamento
-                    FROM {demandas_ordenadas.GetName()}
+                    FROM layer_demandas_ordenadas
                     WHERE "StreetCode" = {street_code}
                 '''
+        if lista_demandas:
+            lista_demandas_str = [str(demanda) for demanda in lista_demandas]
+            sql += f' AND id IN ({", ".join(lista_demandas_str)})'
+
         query = self.datasource_entrada.ExecuteSQL(sql, dialect="SQLite")
-        max_dist_arruamento = 0
 
         for row in query:
             max_dist_arruamento = row['max_dist_arruamento']
-
         self.datasource_entrada.ReleaseResultSet(query)
+
         return max_dist_arruamento
 
-    def gera_pnt_inicial_final_id_caixas(self, lyr_demanda_ordenada, street_code):
+    def get_pnt_inicial_final_id_caixas(self, lyr_demanda_ordenada, street_code):
         aux = []
         lyr_demanda_ordenada.SetAttributeFilter(f"StreetCode = {street_code}")
 
