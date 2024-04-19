@@ -55,8 +55,9 @@ class Arruamento:
         return lyr_arruamentos_recortados
 
     def recorta_arruamento(self, ponto_inicial, ponto_final, streetcode, id_caixa):
+        lyr_arruamento_recortado = self.datasource_entrada.GetLayer('lyr_arruamento_recortado')
         sql = f'''
-                SELECT StreetCode, {id_caixa},
+                SELECT StreetCode,
                         ST_Line_Substring(
                             geometry,
                             ST_Line_Locate_Point(
@@ -77,10 +78,7 @@ class Arruamento:
                 FROM {self.layer}
                 WHERE StreetCode = {streetcode}
         '''
-
         query = self.datasource_entrada.ExecuteSQL(sql, dialect="SQLite")
-
-        lyr_arruamento_recortado = self.datasource_entrada.GetLayer('lyr_arruamento_recortado')
 
         lyr_arruamento_recortado.StartTransaction()
 
@@ -96,6 +94,23 @@ class Arruamento:
         self.datasource_entrada.ReleaseResultSet(query)
 
         return lyr_arruamento_recortado
+
+    def apaga_arruamento_recortado(self, id_caixa):
+        lyr_arruamento_recortado = self.datasource_entrada.GetLayer('lyr_arruamento_recortado')
+        lyr_arruamento_recortado.SetAttributeFilter(f"id_caixa ='{id_caixa}'")
+
+        # o arruamento pode já ter sido apagado, por isso a checagem
+        if lyr_arruamento_recortado.GetFeatureCount():
+            lyr_arruamento_recortado.StartTransaction()
+
+        for feature in lyr_arruamento_recortado:
+            if feature['id_caixa'] == id_caixa:
+                lyr_arruamento_recortado.DeleteFeature(feature.GetFID())
+
+        lyr_arruamento_recortado.CommitTransaction()
+
+        lyr_arruamento_recortado.SetAttributeFilter(None)
+
 
     def get_arruamento_recortado_secundario(self, caixas_secundarias):
         lyr_arruamento_recortado = self.datasource_entrada.GetLayer('lyr_arruamento_recortado')
